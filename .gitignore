@@ -1,0 +1,10 @@
+# Pycharm files
+.idea
+__pycache__
+
+# Project files
+stats
+history
+backup
+*.pkl
+
