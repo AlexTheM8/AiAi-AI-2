@@ -38,7 +38,7 @@ In the `TIME OVER` and `FALL OUT` states, the fitness is determined by how close
 The highest fitness score during a given genome's runtime will be the score evaluated during population reproduction.
 
 ## Inspiration And Purpose
-The design of this project was largely inspired by SethBling's [MarI/O](https://www.youtube.com/watch?v=qv6UVOQ0F44). The inspiration of starting this project came from my wife holding one [World Records](https://www.speedrun.com/smbbm) in *Super Monkey Ball: Banana Mania* speedruns (as of July 22nd, 2024). I simply wanted to feel better about my inadequacy in this series.
+The design of this project was largely inspired by SethBling's [MarI/O](https://www.youtube.com/watch?v=qv6UVOQ0F44). The inspiration of starting this project came from my wife holding one [World Record](https://www.speedrun.com/smbbm) in *Super Monkey Ball: Banana Mania* speedruns (as of July 22nd, 2024). I simply wanted to feel better about my inadequacy in this series.
 
 The purpose of this project is to create a Super Monkey Ball AI that can reasonably beat standard stages in the game.
 
@@ -61,7 +61,7 @@ With these specs, and default configurations, the AI is able to analyze the game
 To utilize this project, be sure to have a working version of the [Dolphin Emulator](https://dolphin-emu.org) installed on your machine, along with a ROM of [Super Monkey Ball 2 for GameCube](https://en.wikipedia.org/wiki/Super_Monkey_Ball_2). The project can be downloaded onto your local machine using the following command:
 
 ```
-git clone https://github.com/AlexTheM8/AiAi-AI.git
+git clone https://github.com/AlexTheM8/AiAi-AI-2.git
 ```
 
 ### Dolphin Emulation Config
