@@ -1,13 +1,13 @@
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 88.5
+fitness_threshold     = 94
 pop_size              = 60
 reset_on_extinction   = True
 
 [DefaultGenome]
 # node activation options
 activation_mutate_rate  = 0.05
-activation_options      = gauss identity tanh clamped sin
+activation_options      = gauss tanh clamped sin sigmoid hat
 #abs clamped cube exp gauss hat identity inv log relu sigmoid sin softplus square tanh
 
 # node aggregation options
@@ -44,7 +44,7 @@ node_delete_prob        = 0.5
 
 # network parameters
 num_hidden              = 0
-num_inputs              = 5106
+num_inputs              = 5109
 num_outputs             = 2
 
 # node response options
@@ -75,5 +75,5 @@ max_stagnation       = 15
 species_elitism      = 0
 
 [DefaultReproduction]
-elitism            = 1
-survival_threshold = 0.1
+elitism            = 2
+survival_threshold = 0.2

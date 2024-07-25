@@ -1,5 +1,4 @@
 from enum import Enum
-from functools import lru_cache
 from optparse import OptionParser
 from random import uniform
 from time import sleep
@@ -36,7 +35,6 @@ class Controller:
         sleep(0.167)
 
     def do_movement(self, x, y):
-        x, y = clamp(x), clamp(y)
         if x != self.x or y != self.y:
             self.x, self.y = x, y
             self.gamepad.left_joystick_float(x_value_float=x, y_value_float=y)
@@ -65,16 +63,6 @@ class Controller:
         sleep(0.1)
         self.do_movement(0, 0)
         sleep(0.1)
-
-
-@lru_cache(maxsize=2 ** 20)
-def clamp(n, minimum=-1.0, maximum=1.0):
-    # TODO Return to this
-    if n > maximum:
-        n = float('0.' + str(n).replace('.', ''))
-    if n < minimum:
-        n = float('-0.' + str(n).replace('.', '').replace('-', ''))
-    return max(minimum, min(n, maximum))
 
 
 if __name__ == "__main__":
