@@ -1,3 +1,7 @@
+# import sys
+#
+# sys.path.insert(0, 'D:/Projects/neat-python')
+
 import datetime
 import logging
 import math
@@ -15,6 +19,7 @@ import pygetwindow as gw
 from mss import mss
 
 from controller import Controller
+
 
 # MEMORY INFO REF SHEET
 # https://github.com/CraftedCart/smbinfo/tree/master/SMB2
@@ -45,7 +50,7 @@ def create_logger(option):
 
 def get_img():
     with mss() as sct:
-        return cv2.cvtColor(np.array(sct.grab(monitor)), cv2.COLOR_RGB2BGR)
+        return cv2.cvtColor(np.array(sct.grab(monitor)), cv2.COLOR_RGB2GRAY)
 
 
 def get_pos():
@@ -133,7 +138,7 @@ def conduct_genome(genome, cfg, genome_id, pop=None):
         img = get_img()
 
         img_copy = cv2.resize(img, (inx, iny))
-        img_copy = np.reshape(img_copy, (inx, iny, inc))
+        img_copy = np.reshape(img_copy, (inx, iny))
 
         img_array = np.ndarray.flatten(img_copy)
         full_array = np.append(img_array, additional_inputs)
@@ -177,6 +182,8 @@ def update_stats(gen, sr, stat_dir, file='stats.csv'):
     with open(f'{stat_dir}/{file}', 'a') as f:
         f.write(','.join([str(gen), str(max_fitness[gen]), str(sr.get_fitness_mean()[-1]),
                           str(sr.get_fitness_stdev()[-1])]) + '\n')
+    with open(f'{stat_dir}/avg_fitness.txt', 'w+') as f:
+        f.write(f'Avg fitness: {str(round(sr.get_fitness_mean()[-1], 2))}')
 
 
 def update_records(gen, rec_type, fitness, stat_dir, file='records.csv'):
@@ -231,6 +238,8 @@ if __name__ == '__main__':
                       help='Enable this flag to stop saving evolution stats. (Default=true)', action='store_false')
     parser.add_option('-z', '--zero_kill', dest='zero_kill',
                       help='Enable this flag to stop killing genome at 0mph. (Default=true)', action='store_false')
+    parser.add_option('--save_dir', '-d', dest='save_dir', default='',
+                      help='Set a custom directory for stats & checkpoints (Default is the current stage name)')
 
     options, args = parser.parse_args()
 
@@ -250,8 +259,12 @@ if __name__ == '__main__':
     bbox = window.box
     monitor = {"top": bbox.top + pad + top_pad, "left": bbox.left + pad,
                "width": bbox.width - (pad * 2), "height": bbox.height - (pad * 2) - top_pad}
-    scale = 14
-    inx, iny, inc = bbox.width // scale, bbox.height // scale, 3
+    if bbox.width > bbox.height:
+        inx = 32
+        iny = (bbox.height * 32) // bbox.width
+    else:
+        iny = 32
+        inx = (bbox.width * 32) // bbox.height
 
     max_steps = 5000
     max_fitness = {}
@@ -265,12 +278,13 @@ if __name__ == '__main__':
     sleep(1)
     controller.load_state()
     sleep(1)
-    stage = mem_eng.read_bytes(0x805BDA10, 15).strip(b'\x00').decode("utf-8").lower()
-    stats_path = f'stats/{stage}'
+    stage = mem_eng.read_bytes(0x805BDA10, 15).split(b'\x00')[0].strip(b'\x00').decode("utf-8").lower()
+    save_dir = options.save_dir if options.save_dir else stage
+    stats_path = f'stats/{save_dir}'
     curr_max_fitness = get_curr_max_fitness(stats_path)
 
     # Network setup
-    hist_path = f'history/{stage}'
+    hist_path = f'history/{save_dir}'
     checkpointer = neat.Checkpointer(generation_interval=1, filename_prefix=f'{hist_path}/neat-checkpoint-')
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          'config-feedforward')
@@ -294,9 +308,10 @@ if __name__ == '__main__':
     # Final
     winner = p.run(eval_genomes)
 
-    win_path = 'winners'
+    win_path = f'winners/{save_dir}' if options.save_dir else 'winners'
     if not path.isdir(win_path):
         mkdir(win_path)
 
-    with open(f'{win_path}/{stage}_winner.pkl', 'wb') as output:
+    win_file = f'{win_path}/{stage}_winner.pkl'
+    with open(win_file, 'wb') as output:
         dump(winner, output, 1)

@@ -1,3 +1,5 @@
+import math
+
 from enum import Enum
 from optparse import OptionParser
 from random import uniform
@@ -8,6 +10,7 @@ import vgamepad as vg
 
 class SetupOptions(Enum):
     LOAD = 'load'
+    FRAME = 'frame'
     UP = 'up'
     DOWN = 'down'
     LEFT = 'left'
@@ -28,6 +31,13 @@ class Controller:
         self.gamepad.update()
         sleep(0.01)
 
+    def frame_advance(self):
+        self.gamepad.press_button(button=vg.DS4_BUTTONS.DS4_BUTTON_SQUARE)
+        self.gamepad.update()
+        sleep(0.01)
+        self.gamepad.release_button(button=vg.DS4_BUTTONS.DS4_BUTTON_SQUARE)
+        self.gamepad.update()
+
     def random_movement(self):
         self.gamepad.left_joystick_float(x_value_float=uniform(-1.0, 1.0),
                                          y_value_float=uniform(-1.0, 1.0))
@@ -35,6 +45,8 @@ class Controller:
         sleep(0.167)
 
     def do_movement(self, x, y):
+        x = clamp(x)
+        y = clamp(y)
         if x != self.x or y != self.y:
             self.x, self.y = x, y
             self.gamepad.left_joystick_float(x_value_float=x, y_value_float=y)
@@ -65,6 +77,14 @@ class Controller:
         sleep(0.1)
 
 
+def clamp(n, minimum=-1.0, maximum=1.0):
+    if minimum <= n <= maximum:
+        return n
+    integer = int(abs(n))
+    digits = int(math.log10(integer)) + 1 if integer <= 999999999999997 else len(str(integer))
+    return n * 10**(-digits)
+
+
 if __name__ == "__main__":
     parser = OptionParser()
 
@@ -80,6 +100,8 @@ if __name__ == "__main__":
     while True:
         if setup == SetupOptions.LOAD.value:
             controller.load_state()
+        elif setup == SetupOptions.FRAME.value:
+            controller.frame_advance()
         elif setup == SetupOptions.UP.value:
             controller.setup_UP()
         elif setup == SetupOptions.DOWN.value:
