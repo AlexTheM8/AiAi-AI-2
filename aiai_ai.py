@@ -1,6 +1,6 @@
-# import sys
-#
-# sys.path.insert(0, 'D:/Projects/neat-python')
+import sys
+
+sys.path.insert(0, 'D:/Projects/neat-python')
 
 import datetime
 import logging
@@ -16,13 +16,14 @@ import dolphin_memory_engine as mem_eng
 import neat
 import numpy as np
 import pygetwindow as gw
-from mss import mss
+from fast_ctypes_screenshots import ScreenshotOfRegion
 
 from controller import Controller
 
 
 # MEMORY INFO REF SHEET
 # https://github.com/CraftedCart/smbinfo/tree/master/SMB2
+# https://github.com/ComplexPlane/smb2-hacking-notes/blob/master/Bites/smb1.dmw
 
 
 class LogOptions(Enum):
@@ -49,20 +50,30 @@ def create_logger(option):
 
 
 def get_img():
-    with mss() as sct:
-        return cv2.cvtColor(np.array(sct.grab(monitor)), cv2.COLOR_RGB2GRAY)
+    with ScreenshotOfRegion(
+            x0=monitor["left"], y0=monitor["top"], x1=monitor["right"], y1=monitor["bottom"], ascontiguousarray=True
+    ) as screenshots_region:
+        return screenshots_region.screenshot_region()[:, :, 1]
 
 
 def get_pos():
-    return mem_eng.read_float(0x805BC9B0), mem_eng.read_float(0x805BC9B4), mem_eng.read_float(0x805BC9B8)
+    return mem_eng.read_float(mem_ppos_x), mem_eng.read_float(mem_ppos_y), mem_eng.read_float(mem_ppos_z)
 
 
 def get_goal_pos():
-    return mem_eng.read_float(0x805E8DE8), mem_eng.read_float(0x805D5040), mem_eng.read_float(0x805E8DF0)
+    return mem_eng.read_float(mem_gpos_x), mem_eng.read_float(mem_gpos_y), mem_eng.read_float(mem_gpos_z)
+
+
+def get_speed():
+    x_vel = mem_eng.read_float(0x80205E7C)
+    y_vel = mem_eng.read_float(0x80205E80)
+    z_vel = mem_eng.read_float(0x80205E84)
+
+    return np.sqrt(x_vel**2 + y_vel**2 + z_vel**2) * 134.73
 
 
 def get_state():
-    return mem_eng.read_bytes(0x805E914C, 9).strip(b'\x00').decode("utf-8")
+    return mem_eng.read_bytes(mem_state, 9).strip(b'\x00').decode("utf-8")
 
 
 def calc_distance(pos1, pos2):
@@ -74,7 +85,7 @@ def calc_distance(pos1, pos2):
 
 
 def calc_angle(pPos, gPos):
-    view_angle = 360 * mem_eng.read_byte(0x8054E072) / 254
+    view_angle = 360 * mem_eng.read_byte(mem_angle) / 254
     px, py, pz = pPos
     gx, gy, gz = gPos
     zDiff = gz - pz
@@ -94,7 +105,8 @@ def interpret_and_act(curr_pos, x_input, y_input, st, g_max):
 
     state = get_state()
     match state:
-        case 'FALL OUT' | 'TIME OVER':
+        case 'FALL OUT' | 'TIME OVER' | 'bomb_scat':
+            state = 'TIME OVER' if state == 'bomb_scat' else state
             g_max -= 25
             done, info = True, state
         case 'GOAL':
@@ -115,10 +127,10 @@ def conduct_genome(genome, cfg, genome_id, pop=None):
     current_max_fitness, g_max, zero_step, done, info = float('-inf'), float('-inf'), 0, False, ''
 
     # Clear out old state
-    mem_eng.write_bytes(0x805E914C, b'\x00')
-    mem_eng.write_float(0x805BC9B0, start_pos[0])
-    mem_eng.write_float(0x805BC9B4, start_pos[1])
-    mem_eng.write_float(0x805BC9B8, start_pos[2])
+    mem_eng.write_bytes(mem_state, b'\x00')
+    mem_eng.write_float(mem_ppos_x, start_pos[0])
+    mem_eng.write_float(mem_ppos_y, start_pos[1])
+    mem_eng.write_float(mem_ppos_z, start_pos[2])
     sleep(0.1)
     controller.load_state()
     sleep(0.1)
@@ -133,8 +145,9 @@ def conduct_genome(genome, cfg, genome_id, pop=None):
         px, py, pz = curr_pos
         gx, gy, gz = goal_pos
 
-        # Distance to goal, horizontal angle to goal, yDiff to goal
-        additional_inputs = [calc_distance(curr_pos, goal_pos), calc_angle(curr_pos, goal_pos), py - gy]
+        # Position, distance to goal, horizontal angle to goal, speed (SMB1), yDiff to goal
+        spd = get_speed() if game_version == 1 else 0
+        additional_inputs = [px, py, pz, calc_distance(curr_pos, goal_pos), calc_angle(curr_pos, goal_pos), spd, py - gy]
         img = get_img()
 
         img_copy = cv2.resize(img, (inx, iny))
@@ -156,9 +169,10 @@ def conduct_genome(genome, cfg, genome_id, pop=None):
             current_max_fitness = g_max
             zero_step = 0
         elif options.zero_kill:
+            kill_start_dist = 15 if game_version == 2 else 5
             if calc_distance(curr_pos, get_pos()) < 0.001:
                 zero_step += 60
-            elif calc_distance(start_pos, get_pos()) < 15:
+            elif calc_distance(start_pos, get_pos()) < kill_start_dist:
                 zero_step += 5
             else:
                 zero_step = 0
@@ -169,7 +183,8 @@ def conduct_genome(genome, cfg, genome_id, pop=None):
                 logger.info('Timed out due to stagnation')
             g_max -= 25
         genome.fitness = g_max
-    logger.info(f'generation: {p.generation}, genome: {genome_id}, fitness: {genome.fitness}')
+    logger.info(f'gen: {p.generation}, spec: {p.species.genome_to_species[genome_id]}, geno: {genome_id},'
+                f' fit: {round(genome.fitness, 2)}')
     if info == 'GOAL':
         update_records(p.generation, 'GOAL', genome.fitness, stats_path)
     controller.do_movement(0, 0)  # Reset movement
@@ -249,16 +264,30 @@ if __name__ == '__main__':
     # Image setup
     user32 = windll.user32
     user32.SetProcessDPIAware()
-    windows = gw.getWindowsWithTitle('Super Monkey Ball 2')
+    windows = gw.getWindowsWithTitle('Super Monkey Ball')
     if len(windows) == 0:
         print('ERROR: Could not find SMB window')
         exit(-1)
     window = windows[0]
-    pad, top_pad = 10, 30
+    game_version = 2 if 'Super Monkey Ball 2' in str(window.title) else 1
+
+    # Memory addresses
+    if game_version == 1:
+        mem_ppos_x, mem_ppos_y, mem_ppos_z = 0x80205F34, 0x80205F44, 0x80205F54
+        mem_gpos_x, mem_gpos_y, mem_gpos_z = 0x80285C24, 0x80285AD0, 0x8028CDB0
+        mem_angle = 0x801EEF1A
+        mem_state = 0x8028CFE4
+        mem_stage = 0x8028D0A0
+    else:
+        mem_ppos_x, mem_ppos_y, mem_ppos_z = 0x805BC9B0, 0x805BC9B4, 0x805BC9B8
+        mem_gpos_x, mem_gpos_y, mem_gpos_z = 0x805E8DE8, 0x805D5040, 0x805E8DF0
+        mem_angle = 0x8054E072
+        mem_state = 0x805E914C
+        mem_stage = 0x805BDA10
 
     bbox = window.box
-    monitor = {"top": bbox.top + pad + top_pad, "left": bbox.left + pad,
-               "width": bbox.width - (pad * 2), "height": bbox.height - (pad * 2) - top_pad}
+    monitor = {"top": bbox.top + 40, "left": bbox.left + 10, "right": bbox.left + bbox.width - 8,
+               "bottom": bbox.top + bbox.height - 10}
     if bbox.width > bbox.height:
         inx = 32
         iny = (bbox.height * 32) // bbox.width
@@ -278,7 +307,7 @@ if __name__ == '__main__':
     sleep(1)
     controller.load_state()
     sleep(1)
-    stage = mem_eng.read_bytes(0x805BDA10, 15).split(b'\x00')[0].strip(b'\x00').decode("utf-8").lower()
+    stage = mem_eng.read_bytes(mem_stage, 15).split(b'\x00')[0].strip(b'\x00').decode("utf-8").lower()
     save_dir = options.save_dir if options.save_dir else stage
     stats_path = f'stats/{save_dir}'
     curr_max_fitness = get_curr_max_fitness(stats_path)

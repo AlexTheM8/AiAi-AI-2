@@ -34,7 +34,7 @@ class Controller:
     def frame_advance(self):
         self.gamepad.press_button(button=vg.DS4_BUTTONS.DS4_BUTTON_SQUARE)
         self.gamepad.update()
-        sleep(0.01)
+        sleep(0.005)
         self.gamepad.release_button(button=vg.DS4_BUTTONS.DS4_BUTTON_SQUARE)
         self.gamepad.update()
 
@@ -80,8 +80,8 @@ class Controller:
 def clamp(n, minimum=-1.0, maximum=1.0):
     if minimum <= n <= maximum:
         return n
-    integer = int(abs(n))
-    digits = int(math.log10(integer)) + 1 if integer <= 999999999999997 else len(str(integer))
+    integer = int(min(abs(n), 999999999999997))
+    digits = int(math.log10(integer)) + 1
     return n * 10**(-digits)
 
 
